@@ -9,16 +9,19 @@
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#101827;color:#f4f6fb;font:16px -apple-system,BlinkMacSystemFont,sans-serif;padding:20px}
-h1{margin:8px 0}p{color:#aab5c8}
+h1{margin:8px 0}
+p{color:#aab5c8}
 .card{background:#1d293b;padding:18px;border-radius:18px;margin:14px 0}
 .balance{font-size:32px;font-weight:750}
 label{display:block;margin:12px 0 6px;color:#bdc8da}
 input,select,button{width:100%;padding:13px;border-radius:10px;border:1px solid #39465b;font-size:16px}
 input,select{background:#101827;color:white}
 button{background:#83e0b0;color:#102319;font-weight:700;border:0;margin-top:14px}
-.item{display:flex;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid #39465b}
+.item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid #39465b}
+.item-info{flex:1;min-width:0;overflow-wrap:anywhere}
 .plus{color:#83e0b0}.minus{color:#ff9a9a}
 .small{font-size:13px;color:#aab5c8}
+.delete{width:auto;flex-shrink:0;margin:0;padding:9px 11px;background:#482a35;color:#ffc1c7;border:1px solid #70404a}
 </style>
 </head>
 <body>
@@ -26,9 +29,9 @@ button{background:#83e0b0;color:#102319;font-weight:700;border:0;margin-top:14px
 <p>Личный финансовый контроль · ₽</p>
 
 <div class="card">
-  <div class="small">Баланс по внесённым записям</div>
-  <div class="balance" id="balance">0 ₽</div>
-  <p id="summary">Доходы: 0 ₽ · Расходы: 0 ₽</p>
+<div class="small">Баланс по внесённым записям</div>
+<div class="balance" id="balance">0 ₽</div>
+<p id="summary">Доходы: 0 ₽ · Расходы: 0 ₽</p>
 </div>
 
 <div class="card">
@@ -55,60 +58,126 @@ button{background:#83e0b0;color:#102319;font-weight:700;border:0;margin-top:14px
 </div>
 
 <div class="card">
-<h3>Последние операции</h3>
+<h3>История операций</h3>
 <div id="history"></div>
 <button id="export">Экспорт резервной копии</button>
-<p class="small">Храни резервную копию отдельно. Очистка данных браузера может удалить историю.</p>
+<p class="small">Перед очисткой данных браузера сохрани резервную копию.</p>
 </div>
 
 <script>
 const key="moi-dengi-records-v1";
 let records=[];
-try{records=JSON.parse(localStorage.getItem(key)||"[]")}catch(e){}
-const money=n=>new Intl.NumberFormat("ru-RU",{maximumFractionDigits:2}).format(n)+" ₽";
-function save(){localStorage.setItem(key,JSON.stringify(records));render()}
+try{
+ const stored=JSON.parse(localStorage.getItem(key)||"[]");
+ if(Array.isArray(stored))records=stored;
+}catch(e){}
+
+const money=n=>new Intl.NumberFormat("ru-RU",{
+ maximumFractionDigits:2
+}).format(n)+" ₽";
+
+function save(){
+ localStorage.setItem(key,JSON.stringify(records));
+ render();
+}
+
 function render(){
- const income=records.filter(x=>x.type!=="expense").reduce((s,x)=>s+x.amount,0);
- const expense=records.filter(x=>x.type==="expense").reduce((s,x)=>s+x.amount,0);
+ const income=records.filter(x=>x.type!=="expense")
+  .reduce((s,x)=>s+x.amount,0);
+ const expense=records.filter(x=>x.type==="expense")
+  .reduce((s,x)=>s+x.amount,0);
+
  document.getElementById("balance").textContent=money(income-expense);
- document.getElementById("summary").textContent="Доходы: "+money(income)+" · Расходы: "+money(expense);
+ document.getElementById("summary").textContent=
+  "Доходы: "+money(income)+" · Расходы: "+money(expense);
+
  const history=document.getElementById("history");
  history.replaceChildren();
- if(!records.length){history.textContent="Записей пока нет.";return}
- records.slice().reverse().slice(0,50).forEach(x=>{
-  const row=document.createElement("div");row.className="item";
-  const left=document.createElement("div");
-  const title=document.createElement("div");title.textContent=x.category;
-  const sub=document.createElement("div");sub.className="small";
-  sub.textContent=x.date+" · "+(x.note||x.type);
-  left.append(title,sub);
-  const right=document.createElement("div");
-  right.className=x.type==="expense"?"minus":"plus";
-  right.textContent=(x.type==="expense"?"−":"+")+money(x.amount);
-  row.append(left,right);history.append(row);
- });
+
+ if(!records.length){
+  history.textContent="Записей пока нет.";
+  return;
+ }
+
+ records.map((x,index)=>({...x,_index:index}))
+  .reverse().forEach(x=>{
+   const row=document.createElement("div");
+   row.className="item";
+
+   const left=document.createElement("div");
+   left.className="item-info";
+
+   const title=document.createElement("div");
+   title.textContent=x.category||"Прочее";
+
+   const sub=document.createElement("div");
+   sub.className="small";
+   sub.textContent=(x.date||"")+
+    " · "+(x.note||x.type);
+
+   left.append(title,sub);
+
+   const right=document.createElement("div");
+   right.className=x.type==="expense"?"minus":"plus";
+   right.textContent=(x.type==="expense"?"−":"+")+
+    money(x.amount);
+
+   const del=document.createElement("button");
+   del.className="delete";
+   del.textContent="🗑️";
+   del.setAttribute("aria-label","Удалить запись");
+
+   del.onclick=()=>{
+    const ok=confirm(
+     "Удалить запись «"+(x.category||"Операция")+"» на "+
+     money(x.amount)+"? Это действие нельзя отменить."
+    );
+    if(!ok)return;
+    records.splice(x._index,1);
+    save();
+   };
+
+   row.append(left,right,del);
+   history.append(row);
+  });
 }
+
 document.getElementById("add").onclick=()=>{
  const amount=Number(document.getElementById("amount").value);
- if(!Number.isFinite(amount)||amount<=0){alert("Введи сумму больше нуля");return}
+ if(!Number.isFinite(amount)||amount<=0){
+  alert("Введи сумму больше нуля");
+  return;
+ }
+
  const type=document.getElementById("type").value;
  records.push({
-  amount,type,
-  category:type==="tip"?"Чаевые":document.getElementById("category").value,
+  amount,
+  type,
+  category:type==="tip"?"Чаевые":
+   document.getElementById("category").value,
   note:document.getElementById("note").value.trim(),
   date:new Date().toLocaleDateString("ru-RU")
  });
+
  save();
  document.getElementById("amount").value="";
  document.getElementById("note").value="";
 };
+
 document.getElementById("export").onclick=()=>{
- const blob=new Blob([JSON.stringify(records,null,2)],{type:"application/json"});
+ const blob=new Blob([JSON.stringify(records,null,2)],{
+  type:"application/json"
+ });
  const url=URL.createObjectURL(blob);
- const a=document.createElement("a");a.href=url;a.download="moi-dengi-backup.json";a.click();
+ const a=document.createElement("a");
+ a.href=url;
+ a.download="moi-dengi-backup.json";
+ a.click();
  setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
+
 render();
 </script>
 </body>
 </html>
+
