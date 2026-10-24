@@ -1,0 +1,114 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101827">
+<title>Мои деньги</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101827;color:#f4f6fb;font:16px -apple-system,BlinkMacSystemFont,sans-serif;padding:20px}
+h1{margin:8px 0}p{color:#aab5c8}
+.card{background:#1d293b;padding:18px;border-radius:18px;margin:14px 0}
+.balance{font-size:32px;font-weight:750}
+label{display:block;margin:12px 0 6px;color:#bdc8da}
+input,select,button{width:100%;padding:13px;border-radius:10px;border:1px solid #39465b;font-size:16px}
+input,select{background:#101827;color:white}
+button{background:#83e0b0;color:#102319;font-weight:700;border:0;margin-top:14px}
+.item{display:flex;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid #39465b}
+.plus{color:#83e0b0}.minus{color:#ff9a9a}
+.small{font-size:13px;color:#aab5c8}
+</style>
+</head>
+<body>
+<h1>Мои деньги</h1>
+<p>Личный финансовый контроль · ₽</p>
+
+<div class="card">
+  <div class="small">Баланс по внесённым записям</div>
+  <div class="balance" id="balance">0 ₽</div>
+  <p id="summary">Доходы: 0 ₽ · Расходы: 0 ₽</p>
+</div>
+
+<div class="card">
+<h3>Новая запись</h3>
+<label>Тип операции</label>
+<select id="type">
+<option value="expense">Расход</option>
+<option value="income">Доход</option>
+<option value="tip">Чаевые</option>
+</select>
+<label>Сумма, ₽</label>
+<input id="amount" type="number" min="1" step="1" placeholder="Например, 500">
+<label>Категория</label>
+<select id="category">
+<option>Продукты</option><option>Транспорт</option>
+<option>Жильё и коммунальные</option><option>Кафе</option>
+<option>Покупки</option><option>Погашение долга</option>
+<option>Зарплата</option><option>Чаевые</option>
+<option>Прочее</option>
+</select>
+<label>Комментарий</label>
+<input id="note" maxlength="100" placeholder="За что платёж">
+<button id="add">Сохранить запись</button>
+</div>
+
+<div class="card">
+<h3>Последние операции</h3>
+<div id="history"></div>
+<button id="export">Экспорт резервной копии</button>
+<p class="small">Храни резервную копию отдельно. Очистка данных браузера может удалить историю.</p>
+</div>
+
+<script>
+const key="moi-dengi-records-v1";
+let records=[];
+try{records=JSON.parse(localStorage.getItem(key)||"[]")}catch(e){}
+const money=n=>new Intl.NumberFormat("ru-RU",{maximumFractionDigits:2}).format(n)+" ₽";
+function save(){localStorage.setItem(key,JSON.stringify(records));render()}
+function render(){
+ const income=records.filter(x=>x.type!=="expense").reduce((s,x)=>s+x.amount,0);
+ const expense=records.filter(x=>x.type==="expense").reduce((s,x)=>s+x.amount,0);
+ document.getElementById("balance").textContent=money(income-expense);
+ document.getElementById("summary").textContent="Доходы: "+money(income)+" · Расходы: "+money(expense);
+ const history=document.getElementById("history");
+ history.replaceChildren();
+ if(!records.length){history.textContent="Записей пока нет.";return}
+ records.slice().reverse().slice(0,50).forEach(x=>{
+  const row=document.createElement("div");row.className="item";
+  const left=document.createElement("div");
+  const title=document.createElement("div");title.textContent=x.category;
+  const sub=document.createElement("div");sub.className="small";
+  sub.textContent=x.date+" · "+(x.note||x.type);
+  left.append(title,sub);
+  const right=document.createElement("div");
+  right.className=x.type==="expense"?"minus":"plus";
+  right.textContent=(x.type==="expense"?"−":"+")+money(x.amount);
+  row.append(left,right);history.append(row);
+ });
+}
+document.getElementById("add").onclick=()=>{
+ const amount=Number(document.getElementById("amount").value);
+ if(!Number.isFinite(amount)||amount<=0){alert("Введи сумму больше нуля");return}
+ const type=document.getElementById("type").value;
+ records.push({
+  amount,type,
+  category:type==="tip"?"Чаевые":document.getElementById("category").value,
+  note:document.getElementById("note").value.trim(),
+  date:new Date().toLocaleDateString("ru-RU")
+ });
+ save();
+ document.getElementById("amount").value="";
+ document.getElementById("note").value="";
+};
+document.getElementById("export").onclick=()=>{
+ const blob=new Blob([JSON.stringify(records,null,2)],{type:"application/json"});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement("a");a.href=url;a.download="moi-dengi-backup.json";a.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+render();
+</script>
+</body>
+</html>
